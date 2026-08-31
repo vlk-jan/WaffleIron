@@ -36,7 +36,7 @@ class Embedding(nn.Module):
             nn.BatchNorm2d(channels_in),
             nn.Conv2d(channels_in, channels_out, 1, bias=False),
             nn.BatchNorm2d(channels_out),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(channels_out, channels_out, 1, bias=False),
         )
 
@@ -86,7 +86,7 @@ class Embedding(nn.Module):
         # Update layers
         self.new_conv2 = nn.Sequential(
             nn.Conv2d(self.channels_in, self.channels_out, 1, bias=True),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(self.channels_out, self.channels_out, 1, bias=False),
         )
         self.new_conv2[0].weight.data = conv2_weight

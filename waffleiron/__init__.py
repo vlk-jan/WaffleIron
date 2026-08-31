@@ -22,13 +22,8 @@ elif torch.__version__ == "2.2.2":
 else:
     # Try torch.scatter_reduce for other non tested versions of pytorch
     WI_SCATTER_REDUCE = True
-WI_SCATTER_REDUCE = bool(int(os.environ.get(
-    "WI_SCATTER_REDUCE", WI_SCATTER_REDUCE
-)))
-if WI_SCATTER_REDUCE:
-    print("Using torch.scatter_reduce for 3D to 2D projection.")
-else:
-    print("Using torch.sparse_coo_tensor for 3D to 2D projection.")
+
+WI_SCATTER_REDUCE = bool(int(os.environ.get("WI_SCATTER_REDUCE", WI_SCATTER_REDUCE)))
 
 from .backbone import WaffleIron
 from .segmenter import Segmenter

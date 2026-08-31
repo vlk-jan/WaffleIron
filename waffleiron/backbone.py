@@ -13,18 +13,26 @@
 # limitations under the License.
 
 
-import os
 import torch
 import warnings
 import torch.nn as nn
 
 from waffleiron import WI_SCATTER_REDUCE
+
 if WI_SCATTER_REDUCE:
-    from .helper_projection import projection_3d_to_2d_scatter_reduce as projection_3d_to_2d
-    from .helper_projection import get_all_projections_scatter_reduce as get_all_projections
+    from .helper_projection import (
+        projection_3d_to_2d_scatter_reduce as projection_3d_to_2d,
+    )
+    from .helper_projection import (
+        get_all_projections_scatter_reduce as get_all_projections,
+    )
 else:
-    from .helper_projection import projection_3d_to_2d_sparse_matrix as projection_3d_to_2d
-    from .helper_projection import get_all_projections_sparse_matrices as get_all_projections
+    from .helper_projection import (
+        projection_3d_to_2d_sparse_matrix as projection_3d_to_2d,
+    )
+    from .helper_projection import (
+        get_all_projections_sparse_matrices as get_all_projections,
+    )
 
 
 class myLayerNorm(nn.LayerNorm):
@@ -34,9 +42,10 @@ class myLayerNorm(nn.LayerNorm):
     def forward(self, x):
         return super().forward(x.transpose(1, -1)).transpose(1, -1)
 
+
 NORM_OPTIONS = {
-	"batchnorm": nn.BatchNorm1d,
-	"layernorm": myLayerNorm,
+    "batchnorm": nn.BatchNorm1d,
+    "layernorm": myLayerNorm,
 }
 
 
@@ -77,7 +86,7 @@ class ChannelMix(nn.Module):
         self.norm = NORM_OPTIONS[which_norm](channels)
         self.mlp = nn.Sequential(
             nn.Conv1d(channels, channels, 1),
-            nn.ReLU(inplace=True),
+            nn.Mish(inplace=True),
             nn.Conv1d(channels, channels, 1),
         )
         self.scale = nn.Conv1d(
@@ -88,8 +97,8 @@ class ChannelMix(nn.Module):
     def compress(self):
         if self.which_norm == "layernorm":
             warnings.warn(
-                "Compression of ChannelMix layer has not been implemented " +
-                "with layer norm. Skipping compression."
+                "Compression of ChannelMix layer has not been implemented "
+                + "with layer norm. Skipping compression."
             )
             return
         # Join Batch norm and first conv
@@ -127,7 +136,7 @@ class SpatialMix(nn.Module):
         self.norm = NORM_OPTIONS[which_norm](channels)
         self.ffn = nn.Sequential(
             nn.Conv2d(channels, channels, 3, padding=1, groups=channels),
-            nn.ReLU(inplace=True),
+            nn.Mish(inplace=True),
             nn.Conv2d(channels, channels, 3, padding=1, groups=channels),
         )
         self.scale = nn.Conv1d(
@@ -188,7 +197,9 @@ class SpatialMix(nn.Module):
 
 
 class WaffleIron(nn.Module):
-    def __init__(self, channels, depth, grids_shape, drop_path_prob, which_norm="batchnorm"):
+    def __init__(
+        self, channels, depth, grids_shape, drop_path_prob, which_norm="batchnorm"
+    ):
         super().__init__()
         self.depth = depth
         self.grids_shape = grids_shape
@@ -197,7 +208,12 @@ class WaffleIron(nn.Module):
         )
         self.spatial_mix = nn.ModuleList(
             [
-                SpatialMix(channels, grids_shape[d % len(grids_shape)], drop_path_prob, which_norm)
+                SpatialMix(
+                    channels,
+                    grids_shape[d % len(grids_shape)],
+                    drop_path_prob,
+                    which_norm,
+                )
                 for d in range(depth)
             ]
         )
@@ -211,8 +227,14 @@ class WaffleIron(nn.Module):
         # Build all 3D to 2D projection matrices
         batch_size, nb_feat, num_points = tokens.shape
         sp_mat = get_all_projections(
-            cell_ind, nb_feat, batch_size, num_points, 
-            occupied_cell, tokens.device, self.grids_shape, tokens.dtype,
+            cell_ind,
+            nb_feat,
+            batch_size,
+            num_points,
+            occupied_cell,
+            tokens.device,
+            self.grids_shape,
+            tokens.dtype,
         )
 
         # Actual backbone
