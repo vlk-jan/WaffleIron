@@ -96,13 +96,25 @@ class Embedding(nn.Module):
         # Flag
         self.compressed = True
 
-    def forward(self, x, neighbors):
-        """x: B x C_in x N. neighbors: B x K x N. Output: B x C_out x N"""
+    # Training only: take the BatchNorm batch statistics over real points, not
+    # over the zero padding of the batch. Eval mode and the state dict are
+    # unchanged. Off = upstream behaviour.
+    masked_bn = False
+
+    def forward(self, x, neighbors, mask=None):
+        """x: B x C_in x N. neighbors: B x K x N. mask: B x N, 1 on real
+        points. Output: B x C_out x N"""
         if self.compressed:
             assert not self.training
+        m = mask.bool() if (self.masked_bn and self.training and mask is not None) else None
+
+        def put(v):  # 1 x C x M -> B x C x N, zeros at padding
+            out = v.new_zeros(x.shape[0], v.shape[1], x.shape[2])
+            out.transpose(0, 1)[:, m] = v[0]
+            return out
 
         # Normalize input
-        x = self.norm(x)
+        x = self.norm(x) if m is None else put(self.norm(x.transpose(0, 1)[:, m][None]))
 
         # Point embedding
         point_emb = self.conv1(x)
@@ -118,7 +130,10 @@ class Embedding(nn.Module):
         # Relative coordinates
         neigh_emb = torch.cat(gather, -1) - x.unsqueeze(-1)  # Size: (B x C x N) x K
         # Embedding
-        neigh_emb = self.conv2(neigh_emb).max(-1)[0]
+        if m is None:
+            neigh_emb = self.conv2(neigh_emb).max(-1)[0]
+        else:
+            neigh_emb = put(self.conv2(neigh_emb.transpose(0, 1)[:, m][None]).max(-1)[0])
 
         # Merge both embeddings
         return self.final(torch.cat((point_emb, neigh_emb), dim=1))
